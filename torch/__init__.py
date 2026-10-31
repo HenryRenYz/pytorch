@@ -330,6 +330,12 @@ def _load_global_deps() -> None:
     here = os.path.abspath(__file__)
     global_deps_lib_path = os.path.join(os.path.dirname(here), "lib", lib_name)
 
+    # Optional HPCKit build helper: initialize the selected C++ runtime and
+    # SME vector length before MPI/KML can load a different C++ ABI runtime.
+    arm_runtime = os.path.join(os.path.dirname(here), "lib", "libtorch_arm_runtime.so")
+    if os.path.isfile(arm_runtime):
+        ctypes.CDLL(arm_runtime, mode=ctypes.RTLD_GLOBAL)
+
     try:
         ctypes.CDLL(global_deps_lib_path, mode=ctypes.RTLD_GLOBAL)
         # Workaround slim-wheel CUDA dependency bugs in cusparse and cudnn by preloading nvjitlink

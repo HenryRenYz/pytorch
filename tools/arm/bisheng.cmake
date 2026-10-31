@@ -38,18 +38,17 @@ function(_bisheng_configure_generated_wrappers)
     DIRECTORY "${CMAKE_SOURCE_DIR}/caffe2"
     APPEND PROPERTY COMPILE_OPTIONS
       -mllvm -openmp-opt-disable -mllvm -attributor-enable=none)
-  # HMPI/KML can load libc++abi before PyTorch's libstdc++, interposing C++
-  # ABI symbols and breaking e.g. locale facets. Establish the selected
-  # PyTorch C++ runtime in the global dependency scope before MPI plugins.
-  if("stdc++" IN_LIST CMAKE_CXX_IMPLICIT_LINK_LIBRARIES)
-    get_target_property(_global_dependencies torch_global_deps LINK_LIBRARIES)
-    set_property(TARGET torch_global_deps PROPERTY LINK_LIBRARIES
-      "-Wl,--no-as-needed;stdc++;${_global_dependencies}")
-  endif()
-  target_sources(torch_global_deps PRIVATE
+  # Load this independently before global MPI/KML dependencies. Loading the
+  # C++ runtime in the same dlopen group as libc++abi is not sufficient to
+  # avoid locale/RTTI symbol interposition on this toolkit.
+  add_library(torch_arm_runtime SHARED
     "${CMAKE_SOURCE_DIR}/tools/arm/runtime_init.c")
-  target_compile_options(torch_global_deps PRIVATE -fopenmp=libomp)
-  target_link_libraries(torch_global_deps
+  set_target_properties(torch_arm_runtime PROPERTIES
+    LINKER_LANGUAGE CXX LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+  target_compile_options(torch_arm_runtime PRIVATE -fopenmp=libomp)
+  target_link_options(torch_arm_runtime PRIVATE -Wl,--no-as-needed)
+  target_link_libraries(torch_arm_runtime PRIVATE
     "$ENV{HPCKIT_ROOT}/compiler/bisheng/lib/libomp.so")
+  install(TARGETS torch_arm_runtime LIBRARY DESTINATION lib)
 endfunction()
 cmake_language(DEFER CALL _bisheng_configure_generated_wrappers)
