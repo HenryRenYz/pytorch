@@ -35,6 +35,7 @@ export CMAKE_CXX_FLAGS='-mcpu=native'
 # Search the C++20 toolchain first, before that explicit system GCC 10 -L path.
 export CMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L$HPCKIT_ROOT/compiler/gcc/lib64"
 export CMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld -L$HPCKIT_ROOT/compiler/gcc/lib64"
+export CMAKE_MODULE_LINKER_FLAGS="$CMAKE_SHARED_LINKER_FLAGS"
 export CMAKE_BUILD_TYPE=Release
 export USE_CUDA=0 USE_CUDNN=0 USE_NCCL=0 USE_ROCM=0 USE_XPU=0
 export USE_DISTRIBUTED=1 USE_MPI=1 USE_GLOO=1 USE_TENSORPIPE=0
