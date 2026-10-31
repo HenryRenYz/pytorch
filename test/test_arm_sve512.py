@@ -2,6 +2,8 @@
 
 import os
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 import torch
@@ -19,6 +21,24 @@ class TestArmSVE512(unittest.TestCase):
         maps = Path("/proc/self/maps").read_text()
         self.assertIn("libomp.so", maps)
         self.assertNotIn("libgomp", maps)
+
+    def test_active_vector_length_dispatch(self):
+        bootstrap = """
+import ctypes, os, sys
+bits = int(sys.argv[1])
+result = ctypes.CDLL(None).prctl(50, bits // 8 | (1 << 17), 0, 0, 0)
+assert result >= 0, result
+os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
+"""
+        for bits, expected in ((128, "DEFAULT"), (256, "SVE256"), (512, "SVE512")):
+            code = (
+                "import torch; "
+                f"assert torch.backends.cpu.get_cpu_capability() == {expected!r}; "
+                "assert torch.arange(1, 32, dtype=torch.float32).sum().item() == 496"
+            )
+            env = dict(os.environ)
+            env.pop("ATEN_CPU_CAPABILITY", None)
+            subprocess.run([sys.executable, "-c", bootstrap, str(bits), code], env=env, check=True)
 
     def test_reductions_and_tails(self):
         for dtype in (torch.float32, torch.float64, torch.bfloat16):
