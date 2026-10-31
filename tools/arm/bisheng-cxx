@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Keep BiSheng as the compiler while selecting a C++20-capable GNU ABI library.
+# Torch's CPU JIT also uses CXX, so a wrapper covers both wheel and JIT builds.
+set -euo pipefail
+arm_kit="${HPCKIT_ROOT:-$HOME/HPCKit/latest}"
+arm_gcc="$arm_kit/compiler/gcc"
+if [[ ! -x "$arm_gcc/bin/g++" ]]; then
+  echo "Missing HPCKit GCC toolchain for C++20: $arm_gcc" >&2
+  exit 1
+fi
+exec "$arm_kit/compiler/bisheng/bin/clang++" --gcc-toolchain="$arm_gcc" "$@"

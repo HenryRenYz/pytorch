@@ -9,7 +9,7 @@ if [[ -z "${HPCKIT_ROOT:-}" ]]; then
 fi
 export HPCKIT_ROOT="$(readlink -f "$HPCKIT_ROOT")"
 export CC="$HPCKIT_ROOT/compiler/bisheng/bin/clang"
-export CXX="$HPCKIT_ROOT/compiler/bisheng/bin/clang++"
+export CXX="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bisheng-cxx"
 export FC="$HPCKIT_ROOT/compiler/bisheng/bin/flang"
 export KML_ROOT="$HPCKIT_ROOT/kml/bisheng"
 export HMPI_ROOT="$HPCKIT_ROOT/hmpi/bisheng/release/hmpi"
