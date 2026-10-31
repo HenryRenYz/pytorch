@@ -145,6 +145,13 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
         torch.testing.assert_close(torch.addmm(c, a, b, alpha=0.75, beta=0.5), expected, atol=0.04, rtol=0.04)
         c.fill_(float("nan"))
         torch.testing.assert_close(torch.addmm(c, a, b, beta=0), (a.double() @ b.double()).bfloat16(), atol=0.04, rtol=0.04)
+        # Poison the destination, including the large square case that exposed
+        # KML's beta=0 output dependency after bypassing oneDNN.
+        a = torch.randn(2, 128, 128).bfloat16()
+        b = torch.randn(2, 128, 128).bfloat16().transpose(-1, -2)
+        out = torch.full((2, 128, 128), float("nan"), dtype=torch.bfloat16)
+        torch.bmm(a, b, out=out)
+        torch.testing.assert_close(out, (a.double() @ b.double()).bfloat16(), atol=0.04, rtol=0.04)
 
     def test_inductor(self):
         from torch._inductor.cpu_vec_isa import pick_vec_isa

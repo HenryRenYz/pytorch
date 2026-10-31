@@ -7,6 +7,7 @@
 #include <c10/util/SmallBuffer.h>
 #include <c10/util/irange.h>
 
+#include <algorithm>
 #include <climits>
 #if !defined(__s390x__ ) && !defined(__powerpc__)
 #include <cpuinfo.h>
@@ -361,9 +362,13 @@ void gemm(
       int c_size = n_ * m_;
       // C matrix in OpenBLAS sbgemm are of type "float" so we have to convert, copy and copy back.
       std::vector<float> float_v(c_size, 0.0f);
-      for (const auto j : c10::irange(n)) {
-        for (const auto i : c10::irange(m)) {
-          float_v[j * m_ + i] = c10::convert<float>(c[j * ldc_ + i]);
+      // beta=0 must not read the original output. In particular, KML sbgemm
+      // can propagate NaNs/garbage even with beta=0 unless its C is initialized.
+      if (beta != 0.0f) {
+        for (const auto j : c10::irange(n)) {
+          for (const auto i : c10::irange(m)) {
+            float_v[j * m_ + i] = c10::convert<float>(c[j * ldc_ + i]);
+          }
         }
       }
       sbgemm_(&transa_, &transb_,
@@ -433,6 +438,13 @@ void gemm(
       int m_ = m, n_ = n, k_ = k, lda_ = lda, ldb_ = ldb, ldc_ = ldc;
       char transa_ = to_blas(transa), transb_ = to_blas(transb);
       float alpha_ = alpha, beta_ = beta;
+#ifdef ATEN_ARM_PREFER_BLAS_BF16
+      if (beta == 0.0f) {
+        for (const auto j : c10::irange(n)) {
+          std::fill_n(c + j * ldc, m, 0.0f);
+        }
+      }
+#endif
       sbgemm_(&transa_, &transb_,
               &m_, &n_, &k_,
               &alpha_,

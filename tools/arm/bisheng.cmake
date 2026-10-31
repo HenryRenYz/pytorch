@@ -28,7 +28,9 @@ function(_bisheng_configure_generated_wrappers)
   # oneDNN 3.7.1 selects gemm:jit:bf16 on this CPU, but a 512^3 GEMM takes
   # 1.14 s versus 2.8 ms through KML sbgemm. Prefer the standard BLAS path
   # for BF16 matmul only; retain oneDNN for convolution and other operators.
-  set_property(SOURCE "${CMAKE_SOURCE_DIR}/aten/src/ATen/native/mkldnn/Matmul.cpp"
+  set_property(SOURCE
+    "${CMAKE_SOURCE_DIR}/aten/src/ATen/native/mkldnn/Matmul.cpp"
+    "${CMAKE_SOURCE_DIR}/aten/src/ATen/native/CPUBlas.cpp"
     DIRECTORY "${CMAKE_SOURCE_DIR}/caffe2"
     APPEND PROPERTY COMPILE_DEFINITIONS ATEN_ARM_PREFER_BLAS_BF16)
   set(_wrappers)
