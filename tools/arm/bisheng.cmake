@@ -18,3 +18,24 @@ set(CMAKE_JOB_POOLS "compile=$ENV{MAX_JOBS};link=1" CACHE STRING "" FORCE)
 set(CMAKE_JOB_POOL_COMPILE compile CACHE STRING "" FORCE)
 set(CMAKE_JOB_POOL_LINK link CACHE STRING "" FORCE)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
+
+# BiSheng 5.2 / LLVM 19 spends tens of minutes in OpenMPOpt's Attributor on
+# these generated registration wrappers, which contain no OpenMP regions.
+# Apply the workaround in the target's directory after it has been added;
+# leave numerical kernels and their OpenMP optimizations unchanged.
+function(_bisheng_configure_generated_wrappers)
+  set(_wrappers)
+  foreach(_shard RANGE 0 4)
+    list(APPEND _wrappers
+      "${CMAKE_SOURCE_DIR}/torch/csrc/autograd/generated/TraceType_${_shard}.cpp")
+  endforeach()
+  foreach(_shard RANGE 0 1)
+    list(APPEND _wrappers
+      "${CMAKE_SOURCE_DIR}/torch/csrc/autograd/generated/ADInplaceOrViewType_${_shard}.cpp")
+  endforeach()
+  set_property(SOURCE ${_wrappers}
+    DIRECTORY "${CMAKE_SOURCE_DIR}/caffe2"
+    APPEND PROPERTY COMPILE_OPTIONS
+      -mllvm -openmp-opt-disable -mllvm -attributor-enable=none)
+endfunction()
+cmake_language(DEFER CALL _bisheng_configure_generated_wrappers)
