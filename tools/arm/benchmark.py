@@ -4,17 +4,31 @@ import argparse
 import json
 import os
 import platform
-
-import torch
-import torch.nn.functional as F
-from torch.utils.benchmark import Timer
+import subprocess
+import sys
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--threads", type=int, nargs="+", default=[1, 4, 16])
     parser.add_argument("--min-run-time", type=float, default=0.3)
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if not args.worker:
+        for threads in args.threads:
+            env = dict(os.environ)
+            for variable in ("OMP_NUM_THREADS", "BLAS_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+                env[variable] = str(threads)
+            subprocess.run([
+                sys.executable, __file__, "--worker", "--threads", str(threads),
+                "--min-run-time", str(args.min_run_time),
+            ], env=env, check=True)
+        return
+
+    import torch
+    import torch.nn.functional as F
+    from torch.utils.benchmark import Timer
+
     torch.manual_seed(2026)
     torch.set_num_interop_threads(1)
     print(json.dumps({
