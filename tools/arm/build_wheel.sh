@@ -23,6 +23,9 @@ if (( MAX_JOBS < 1 )); then echo 'Insufficient build memory' >&2; exit 1; fi
 export CMAKE_BUILD_PARALLEL_LEVEL="$MAX_JOBS"
 export CMAKE_C_COMPILER="$CC" CMAKE_CXX_COMPILER="$CXX"
 export CMAKE_PROJECT_TOP_LEVEL_INCLUDES="$arm_source_root/tools/arm/bisheng.cmake"
+# Gloo TLS is disabled. Avoid parsing the vendor OpenSSL 1.1.1wa patch number,
+# which makes CMake 3.31 emit a non-UTF-8 byte into CMakeCache.txt on Kylin.
+export CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
 export CMAKE_C_FLAGS='-mcpu=native'
 export CMAKE_CXX_FLAGS='-mcpu=native'
 export CMAKE_EXE_LINKER_FLAGS='-fuse-ld=lld'
