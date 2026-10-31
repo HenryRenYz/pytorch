@@ -5,6 +5,9 @@ endif()
 set(_hpckit "$ENV{HPCKIT_ROOT}")
 set(_compiler "${_hpckit}/compiler/bisheng")
 set(CMAKE_DISABLE_FIND_PACKAGE_OpenSSL TRUE CACHE BOOL "Gloo TLS is disabled" FORCE)
+# These sources use headers, not named C++20 modules. The HPCKit mini compiler
+# does not ship clang-scan-deps, which newer CMake otherwise invokes for fmt.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF CACHE BOOL "No C++20 named modules" FORCE)
 set(OpenMP_C_FLAGS "-fopenmp=libomp" CACHE STRING "" FORCE)
 set(OpenMP_CXX_FLAGS "-fopenmp=libomp" CACHE STRING "" FORCE)
 set(OpenMP_C_LIB_NAMES "omp" CACHE STRING "" FORCE)
