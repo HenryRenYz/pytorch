@@ -136,7 +136,21 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
                     torch.testing.assert_close(torch.bmm(a, b), expected, atol=tol, rtol=tol)
                     torch.testing.assert_close(a[0] @ b[0], expected[0], atol=tol, rtol=tol)
 
+    def test_bf16_addmm(self):
+        torch.manual_seed(30)
+        a = torch.randn(65, 129).bfloat16()
+        b = torch.randn(33, 129).bfloat16().t()
+        c = torch.randn(65, 33).bfloat16()
+        expected = (0.75 * (a.double() @ b.double()) + 0.5 * c.double()).bfloat16()
+        torch.testing.assert_close(torch.addmm(c, a, b, alpha=0.75, beta=0.5), expected, atol=0.04, rtol=0.04)
+        c.fill_(float("nan"))
+        torch.testing.assert_close(torch.addmm(c, a, b, beta=0), (a.double() @ b.double()).bfloat16(), atol=0.04, rtol=0.04)
+
     def test_inductor(self):
+        from torch._inductor.cpu_vec_isa import pick_vec_isa
+
+        self.assertEqual(pick_vec_isa().bit_width(), 512)
+
         def fused(x, y):
             return ((x + y).relu() * 0.5).sum(-1)
 

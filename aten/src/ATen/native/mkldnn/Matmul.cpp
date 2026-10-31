@@ -103,7 +103,13 @@ bool use_mkldnn_tf32_matmul(
 namespace at::native {
 
 static bool use_mkldnn_bf16_matmul() {
+#if defined(ATEN_ARM_PREFER_BLAS_BF16) && AT_BUILD_WITH_BLAS() && defined(BLAS_HAS_SBGEMM)
+  // Opt-in for ARM BLAS builds with a faster BF16 GEMM implementation.
+  // Keep oneDNN available for other operators instead of disabling it globally.
+  return false;
+#else
   return at::globalContext().userEnabledMkldnn() && mkldnn_bf16_device_check();
+#endif
 }
 
 static bool use_mkldnn_fp16_matmul() {
