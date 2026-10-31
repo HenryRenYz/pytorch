@@ -334,6 +334,10 @@ def _load_global_deps() -> None:
     # SME vector length before MPI/KML can load a different C++ ABI runtime.
     arm_runtime = os.path.join(os.path.dirname(here), "lib", "libtorch_arm_runtime.so")
     if os.path.isfile(arm_runtime):
+        # Load libstdc++ as its own global group before HPCKit brings in libc++.
+        # A transitive dependency of the helper alone does not establish the
+        # required symbol lookup order for GNU C++ locale/RTTI definitions.
+        ctypes.CDLL("libstdc++.so.6", mode=ctypes.RTLD_GLOBAL)
         ctypes.CDLL(arm_runtime, mode=ctypes.RTLD_GLOBAL)
 
     try:
