@@ -38,4 +38,4 @@ export PYTORCH_BUILD_VERSION=2.9.0+cpu.sve512.bisheng PYTORCH_BUILD_NUMBER=1
 export OMP_NUM_THREADS=1 BLAS_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
 export PIP_NO_BUILD_ISOLATION=1
 printf 'MAX_JOBS=%s\n' "$MAX_JOBS"
-python -m pip wheel --no-build-isolation --no-deps --wheel-dir "$arm_source_root/dist" . 2>&1 | tee "$HOME/pytorch-arm-artifacts/build-wheel.log"
+python -m pip wheel --verbose --no-build-isolation --no-deps --wheel-dir "$arm_source_root/dist" . 2>&1 | tee "$HOME/pytorch-arm-artifacts/build-wheel.log"
