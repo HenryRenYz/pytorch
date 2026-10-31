@@ -85,6 +85,18 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
         rhs = torch.randn(17, 3, dtype=torch.float64)
         result = torch.linalg.solve(x, rhs)
         torch.testing.assert_close(x @ result, rhs)
+        lower = torch.linalg.cholesky(x)
+        torch.testing.assert_close(lower @ lower.t(), x)
+
+    def test_explicit_dispatch_registrations(self):
+        values = torch.arange(1, 8, dtype=torch.float32)
+        reduced = torch.segment_reduce(values, "sum", lengths=torch.tensor([2, 3, 2]))
+        torch.testing.assert_close(reduced, torch.tensor([3.0, 12.0, 13.0]))
+        indices = torch.tensor([[0, 1, 2], [1, 2, 0]])
+        sparse = torch.sparse_coo_tensor(indices, torch.tensor([2.0, 3.0, 4.0]), (3, 3))
+        torch.testing.assert_close((sparse * sparse).to_dense(), sparse.to_dense().square())
+        x = torch.arange(33, dtype=torch.float32)
+        torch.testing.assert_close(torch.fft.irfft(torch.fft.rfft(x), n=33), x, atol=1e-5, rtol=1e-5)
 
     def test_inductor(self):
         def fused(x, y):
