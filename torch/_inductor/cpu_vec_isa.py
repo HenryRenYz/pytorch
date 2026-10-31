@@ -191,6 +191,24 @@ class VecSVE256(VecISA):
 
 
 @dataclasses.dataclass
+class VecSVE512(VecISA):
+    _bit_width = 512
+    _macro = [
+        "CPU_CAPABILITY_SVE",
+        "CPU_CAPABILITY_SVE512",
+        "AT_BUILD_ARM_VEC256_WITH_SLEEF",
+        "__ARM_FEATURE_BF16",
+    ]
+    _arch_flags = "-march=armv8-a+sve+bf16 -msve-vector-bits=512"
+    _dtype_nelements = {torch.float: 16, torch.bfloat16: 32, torch.float16: 32}
+
+    def __str__(self) -> str:
+        return "neon" if config.is_fbcode() else "asimd"
+
+    __hash__: Callable[[VecISA], Any] = VecISA.__hash__  # type: ignore[assignment]
+
+
+@dataclasses.dataclass
 class VecAVX512(VecISA):
     _bit_width = 512
     _macro = ["CPU_CAPABILITY_AVX512"]
@@ -409,6 +427,7 @@ supported_vec_isa_list = [
     VecAVX512(),
     VecAVX2(),
     VecNEON(),
+    VecSVE512(),
     VecSVE256(),
 ]
 
@@ -471,7 +490,9 @@ def valid_vec_isa_list() -> list[VecISA]:
     elif arch == "ppc64le":
         isa_list.append(VecVSX())
     elif arch == "aarch64":
-        if torch.backends.cpu.get_cpu_capability() == "SVE256":
+        if torch.backends.cpu.get_cpu_capability() == "SVE512":
+            isa_list.append(VecSVE512())
+        elif torch.backends.cpu.get_cpu_capability() == "SVE256":
             isa_list.append(VecSVE256())
         else:
             isa_list.append(VecNEON())

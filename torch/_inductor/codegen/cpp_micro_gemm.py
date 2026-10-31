@@ -16,6 +16,7 @@ from ..cpu_vec_isa import (
     VecISA,
     VecNEON,
     VecSVE256,
+    VecSVE512,
 )
 from ..utils import IndentedBuffer, parallel_num_threads
 from ..virtualized import V
@@ -427,6 +428,14 @@ def do_not_use_with_small_m_for_int8_woq(config, m, n, k, alpha, num_threads, **
     *generate_gemm_config(
         VecSVE256,
         [(4, 24, 1), (4, 16, 1), (8, 8, 1)],
+        input_dtype=torch.float,
+        input2_dtype=torch.float,
+        output_dtype=torch.float,
+        compute_dtype=torch.float,
+    ),
+    *generate_gemm_config(
+        VecSVE512,
+        [(4, 32, 1), (4, 16, 1), (8, 16, 1)],
         input_dtype=torch.float,
         input2_dtype=torch.float,
         output_dtype=torch.float,

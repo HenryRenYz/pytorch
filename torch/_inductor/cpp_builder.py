@@ -870,7 +870,7 @@ def _get_optimization_cflags(
             # https://stackoverflow.com/questions/65966969/why-does-march-native-not-work-on-apple-m1
             # `-march=native` is unrecognized option on M1
             if not config.is_fbcode():
-                if platform.machine() == "ppc64le":
+                if platform.machine() in ("ppc64le", "aarch64"):
                     cflags.append("mcpu=native")
                 else:
                     cflags.append("march=native")
@@ -1309,9 +1309,8 @@ def _get_openmp_args(
             libs.append("omp")
         else:
             if _is_clang(cpp_compiler):
-                # TODO: fix issue, can't find omp.h
-                cflags.append("fopenmp")
-                libs.append("gomp")
+                cflags.append("fopenmp=libomp")
+                libs.append("omp")
             elif _is_intel_compiler(cpp_compiler):
                 cflags.append("fiopenmp")
             else:

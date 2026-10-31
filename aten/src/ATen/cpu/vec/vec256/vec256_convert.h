@@ -294,7 +294,7 @@ struct VecConvert<
 };
 #endif
 
-#if defined(CPU_CAPABILITY_SVE256) && defined(__ARM_FEATURE_BF16)
+#if (defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512)) && defined(__ARM_FEATURE_BF16)
 
 template <>
 struct VecConvert<float, 1, BFloat16, 1> {
@@ -334,7 +334,7 @@ struct VecConvert<BFloat16, 1, float, 2> {
   }
 };
 
-#endif // defined(CPU_CAPABILITY_SVE256) && defined(__ARM_FEATURE_BF16)
+#endif // (defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512)) && defined(__ARM_FEATURE_BF16)
 
 template <typename src_t>
 struct VecConvert<

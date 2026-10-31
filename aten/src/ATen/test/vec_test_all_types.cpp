@@ -591,9 +591,9 @@ namespace {
       for (unsigned int ii = 0; ii < 0xFFFF; ++ii) {
         c10::BFloat16 val(ii, c10::BFloat16::from_bits());
         bool expected = std::isnan(val);
-        CACHE_ALIGN c10::BFloat16 actual_vals[at::vec::SVE256::Vectorized<c10::BFloat16>::size()];
-        at::vec::SVE256::Vectorized<c10::BFloat16>(val).isnan().store(actual_vals);
-        for (int jj = 0; jj < at::vec::SVE256::Vectorized<c10::BFloat16>::size(); ++jj) {
+        CACHE_ALIGN c10::BFloat16 actual_vals[at::vec::CPU_CAPABILITY::Vectorized<c10::BFloat16>::size()];
+        at::vec::CPU_CAPABILITY::Vectorized<c10::BFloat16>(val).isnan().store(actual_vals);
+        for (int jj = 0; jj < at::vec::CPU_CAPABILITY::Vectorized<c10::BFloat16>::size(); ++jj) {
           EXPECT_EQ(expected, c10::bit_cast<uint16_t>(actual_vals[jj]) != 0) << "bf16 isnan failure for bit pattern " << std::hex << ii << std::dec;
         }
       }
@@ -1562,6 +1562,19 @@ namespace {
         }
     }
 #endif
+    TEST(FunctionalSVE, FloatReductionAcrossAllLanes) {
+      float values[127];
+      for (int i = 0; i < 127; ++i) {
+        values[i] = static_cast<float>(i + 1);
+      }
+      for (int n : {1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127}) {
+        EXPECT_EQ(at::vec::reduce_all<float>([](auto a, auto b) { return a + b; }, values, n),
+                  n * (n + 1) / 2) << "length=" << n;
+        EXPECT_EQ(at::vec::reduce_all<float>([](auto a, auto b) { return at::vec::maximum(a, b); }, values, n),
+                  n) << "length=" << n;
+      }
+    }
+
     TYPED_TEST(FunctionalTests, Map) {
         using vec = TypeParam;
         using VT = ValueType<TypeParam>;

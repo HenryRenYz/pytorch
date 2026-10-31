@@ -153,6 +153,7 @@ IF(CMAKE_SYSTEM_NAME MATCHES "Linux")
 
     # Check for SVE256 vector length
     CHECK_COMPILES(CXX "SVE256" "-march=armv8.2-a+sve -msve-vector-bits=256" "${SVE_CODE}")
+    CHECK_COMPILES(CXX "SVE512" "-march=armv8.2-a+sve -msve-vector-bits=512" "${SVE_CODE}")
     CHECK_COMPILES(CXX "ARM_BF16" "-march=armv8.2-a+sve+bf16 -msve-vector-bits=256" "${ARM_BF16_CODE}")
 
     # If SVE256 support is not found, set CXX_SVE_FOUND to FALSE and notify the user

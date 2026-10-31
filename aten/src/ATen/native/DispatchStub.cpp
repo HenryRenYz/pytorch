@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#if defined(__linux__) && defined(__aarch64__)
+#include <sys/prctl.h>
+#endif
 
 #ifdef HAVE_ZVECTOR_CPU_DEFINITION
 #include <sys/auxv.h>
@@ -23,6 +26,18 @@ namespace at::native {
 static inline bool cpu_has_vxe()
 {
   return (getauxval(AT_HWCAP) & HWCAP_S390_VXE);
+}
+#endif
+
+#ifdef HAVE_SVE_CPU_DEFINITION
+// Fixed-length SVE kernels require the active thread VL, not the CPU maximum.
+static int current_sve_vector_length() {
+#if defined(__linux__) && defined(__aarch64__) && defined(PR_SVE_GET_VL)
+  const int vl = prctl(PR_SVE_GET_VL);
+  return vl < 0 ? 0 : (vl & PR_SVE_VL_LEN_MASK) * 8;
+#else
+  return 0;
+#endif
 }
 #endif
 
@@ -38,17 +53,22 @@ static CPUCapability compute_cpu_capability() {
       return CPUCapability::ZVECTOR;
     }
 #elif defined(HAVE_SVE_CPU_DEFINITION)
-    int sve_vl = cpuinfo_get_max_arm_sve_length(); //Returns maximum SVE VL supported by your HW.
+    const int sve_vl = current_sve_vector_length();
 #ifdef HAVE_SVE256_CPU_DEFINITION
     if (envar == "sve256") {
-      if (sve_vl == 256) {
-#ifdef HAVE_ARM_BF16_CPU_DEFINITION
-        if (cpuinfo_has_arm_bf16()) {
-          return CPUCapability::SVE256;
-        }
-#endif
+      if (sve_vl == 256 && cpuinfo_initialize() && cpuinfo_has_arm_bf16()) {
+        return CPUCapability::SVE256;
       }
-      TORCH_WARN("SVE256 capability not available on hardware. Falling back to DEFAULT");
+      TORCH_WARN("SVE256 requires an active 256-bit SVE vector length and BF16. Falling back to DEFAULT");
+      return CPUCapability::DEFAULT;
+    }
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+    if (envar == "sve512") {
+      if (sve_vl == 512 && cpuinfo_initialize() && cpuinfo_has_arm_bf16()) {
+        return CPUCapability::SVE512;
+      }
+      TORCH_WARN("SVE512 requires an active 512-bit SVE vector length and BF16. Falling back to DEFAULT");
       return CPUCapability::DEFAULT;
     }
 #endif
@@ -98,22 +118,18 @@ static CPUCapability compute_cpu_capability() {
 #endif
 
 #if defined(__linux__) && defined(HAVE_SVE_CPU_DEFINITION)
-  if (cpuinfo_initialize() && cpuinfo_has_arm_sve()) {
-    int sve_vl = cpuinfo_get_max_arm_sve_length(); //Returns maximum SVE VL supported by your HW.
-    if (sve_vl <= 0) {
-      // SVE is not supported on this system.
-      // Return the default CPU capability.
-      return CPUCapability::DEFAULT;
+  if (cpuinfo_initialize() && cpuinfo_has_arm_sve() && cpuinfo_has_arm_bf16()) {
+    const int sve_vl = current_sve_vector_length();
+#ifdef HAVE_SVE512_CPU_DEFINITION
+    if (sve_vl == 512) {
+      return CPUCapability::SVE512;
     }
-    #ifdef HAVE_SVE256_CPU_DEFINITION
-        if (sve_vl == 256) { // Check for SVE256
-        #ifdef HAVE_ARM_BF16_CPU_DEFINITION
-          if (cpuinfo_has_arm_bf16())
-            return CPUCapability::SVE256;
-        #endif
-        }
-    #endif
-    // Return the default CPU capability.
+#endif
+#ifdef HAVE_SVE256_CPU_DEFINITION
+    if (sve_vl == 256) {
+      return CPUCapability::SVE256;
+    }
+#endif
     return CPUCapability::DEFAULT;
   }
 #endif
@@ -146,6 +162,9 @@ DispatchResult DispatchStubImpl::try_get_call_ptr(
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
   , void *SVE256
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  , void *SVE512
 #endif
 ) {
   constexpr auto supported_devices = c10::array_of<c10::DeviceType>(
@@ -184,6 +203,9 @@ DispatchResult DispatchStubImpl::try_get_call_ptr(
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
           , SVE256
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+          , SVE512
 #endif
         );
         if (!std::holds_alternative<ErrorType>(result)) {
@@ -242,6 +264,9 @@ void* DispatchStubImpl::get_call_ptr(
 #ifdef HAVE_SVE256_CPU_DEFINITION
   , void *SVE256
 #endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  , void *SVE512
+#endif
 ) {
 
   auto result = try_get_call_ptr(
@@ -266,6 +291,10 @@ void* DispatchStubImpl::get_call_ptr(
 #ifdef HAVE_SVE256_CPU_DEFINITION
       ,
       SVE256
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+      ,
+      SVE512
 #endif
   );
   if (std::holds_alternative<ErrorType>(result)) {
@@ -301,6 +330,9 @@ DispatchResult DispatchStubImpl::try_choose_cpu_impl(
 #ifdef HAVE_SVE256_CPU_DEFINITION
     , void *SVE256
 #endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+    , void *SVE512
+#endif
   ){
 
   auto capability = static_cast<int>(get_cpu_capability());
@@ -334,12 +366,22 @@ DispatchResult DispatchStubImpl::try_choose_cpu_impl(
   }
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
-  if (capability >= static_cast<int>(CPUCapability::SVE256)) {
+  if (capability == static_cast<int>(CPUCapability::SVE256)) {
     if (C10_UNLIKELY(!SVE256)) {
       // dispatch to DEFAULT, since the SVE kernel is missing
       return DEFAULT != nullptr ? DispatchResult(DEFAULT) : ErrorType::MissingDeviceKernel;
     } else {
       return DispatchResult(SVE256);
+    }
+  }
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  if (capability == static_cast<int>(CPUCapability::SVE512)) {
+    if (C10_UNLIKELY(!SVE512)) {
+      // dispatch to DEFAULT, since the SVE kernel is missing
+      return DEFAULT != nullptr ? DispatchResult(DEFAULT) : ErrorType::MissingDeviceKernel;
+    } else {
+      return DispatchResult(SVE512);
     }
   }
 #endif
@@ -362,6 +404,9 @@ void* DispatchStubImpl::choose_cpu_impl(
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
   , void *SVE256
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  , void *SVE512
 #endif
 ) {
   auto capability = static_cast<int>(get_cpu_capability());
@@ -399,13 +444,24 @@ void* DispatchStubImpl::choose_cpu_impl(
   }
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
-  if (capability >= static_cast<int>(CPUCapability::SVE256)) {
+  if (capability == static_cast<int>(CPUCapability::SVE256)) {
     if (C10_UNLIKELY(!SVE256)) {
       // dispatch to DEFAULT, since the SVE kernel is missing
       TORCH_INTERNAL_ASSERT(DEFAULT, "DispatchStub: missing default kernel");
       return DEFAULT;
     } else {
       return SVE256;
+    }
+  }
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  if (capability == static_cast<int>(CPUCapability::SVE512)) {
+    if (C10_UNLIKELY(!SVE512)) {
+      // dispatch to DEFAULT, since the SVE kernel is missing
+      TORCH_INTERNAL_ASSERT(DEFAULT, "DispatchStub: missing default kernel");
+      return DEFAULT;
+    } else {
+      return SVE512;
     }
   }
 #endif

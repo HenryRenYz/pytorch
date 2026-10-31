@@ -64,8 +64,13 @@ enum class CPUCapability {
   VSX = 1,
 #elif defined(HAVE_ZVECTOR_CPU_DEFINITION)
   ZVECTOR = 1,
-#elif defined(HAVE_SVE256_CPU_DEFINITION) && defined(HAVE_ARM_BF16_CPU_DEFINITION)
+#elif defined(HAVE_SVE_CPU_DEFINITION) && defined(HAVE_ARM_BF16_CPU_DEFINITION)
+#ifdef HAVE_SVE256_CPU_DEFINITION
   SVE256 = 1,
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  SVE512 = 2,
+#endif
 #else
   AVX2 = 1,
   AVX512 = 2,
@@ -118,6 +123,9 @@ struct TORCH_API DispatchStubImpl {
 #ifdef HAVE_SVE256_CPU_DEFINITION
       , void *SVE256
 #endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+      , void *SVE512
+#endif
   );
 
   // Analogous to try_get_call_ptr(), but it will return the ErrorType and not
@@ -139,6 +147,9 @@ struct TORCH_API DispatchStubImpl {
 #ifdef HAVE_SVE256_CPU_DEFINITION
     , void *SVE256
 #endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+    , void *SVE512
+#endif
   );
 
 
@@ -159,6 +170,9 @@ struct TORCH_API DispatchStubImpl {
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
       , void *SVE256
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+      , void *SVE512
 #endif
   );
 
@@ -183,6 +197,9 @@ struct TORCH_API DispatchStubImpl {
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
     , void *SVE256
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+    , void *SVE512
 #endif
   );
 
@@ -240,6 +257,9 @@ private:
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
       , reinterpret_cast<void*>(SVE256)
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+      , reinterpret_cast<void*>(SVE512)
 #endif
       )
     );
@@ -302,6 +322,9 @@ public:
 #ifdef HAVE_SVE256_CPU_DEFINITION
       , reinterpret_cast<void*>(SVE256)
 #endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+      , reinterpret_cast<void*>(SVE512)
+#endif
       );
     if (std::holds_alternative<ErrorType>(result)){
       return false;
@@ -324,6 +347,9 @@ public:
 #endif
 #ifdef HAVE_SVE256_CPU_DEFINITION
   static TORCH_API FnPtr SVE256;
+#endif
+#ifdef HAVE_SVE512_CPU_DEFINITION
+  static TORCH_API FnPtr SVE512;
 #endif
 private:
   DispatchStubImpl impl;
@@ -440,7 +466,8 @@ struct RegisterPRIVATEUSE1Dispatch {
   REGISTER_AVX2_DISPATCH(name, fn)                                             \
   REGISTER_VSX_DISPATCH(name, fn)                                              \
   REGISTER_ZVECTOR_DISPATCH(name, fn)                                          \
-  REGISTER_SVE256_DISPATCH(name, fn)
+  REGISTER_SVE256_DISPATCH(name, fn)                                          \
+  REGISTER_SVE512_DISPATCH(name, fn)
 
 #define REGISTER_NO_CPU_DISPATCH(name)                                         \
   REGISTER_ALL_CPU_DISPATCH(name, nullptr)
