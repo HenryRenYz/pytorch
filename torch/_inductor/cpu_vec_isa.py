@@ -439,7 +439,12 @@ def get_isa_from_cpu_capability(
 ):
     # AMX setting is not supported in eager
     # VecAMX will be prioritized for selection when setting ATEN_CPU_CAPABILITY to avx512
-    # TODO add sve256 support
+    if capability in ("sve256", "sve512"):
+        sve_bits = int(capability[3:])
+        for vec_isa in vec_isa_list:
+            if isinstance(vec_isa, (VecSVE256, VecSVE512)) and vec_isa.bit_width() == sve_bits:
+                return vec_isa
+
     capability_to_isa_str = {
         "default": "INVALID_VEC_ISA",
         "zvector": "zvector",
