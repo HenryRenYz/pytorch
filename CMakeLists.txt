@@ -798,28 +798,35 @@ if(USE_PRIORITIZED_TEXT_FOR_LD)
   set(LINKER_SCRIPT_FILE_IN "${CMAKE_SOURCE_DIR}/cmake/prioritized_text.txt")
   set(LINKER_SCRIPT_FILE_OUT "${CMAKE_SOURCE_DIR}/cmake/linker_script.ld")
 
-  execute_process(
-    COMMAND ${Python_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/tools/setup_helpers/generate_linker_script.py
-            --filein "${LINKER_SCRIPT_FILE_IN}"
-            --fout  "${LINKER_SCRIPT_FILE_OUT}"
-    RESULT_VARIABLE _gen_result
-    OUTPUT_VARIABLE _gen_output
-    ERROR_VARIABLE  _gen_error
-  )
+  if(CMAKE_LINKER_TYPE STREQUAL "LLD" OR CMAKE_SHARED_LINKER_FLAGS MATCHES "-fuse-ld=lld")
+    # A GNU default script can put R/RX sections on the same page under LLD.
+    # Native symbol ordering retains prioritization and LLD's safe ELF layout.
+    set(_lld_text_order "-Wl,--symbol-ordering-file=${LINKER_SCRIPT_FILE_IN},--no-warn-symbol-ordering")
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS " ${_lld_text_order}")
+    string(APPEND CMAKE_MODULE_LINKER_FLAGS " ${_lld_text_order}")
+  else()
+    execute_process(
+      COMMAND ${Python_EXECUTABLE}
+              ${CMAKE_SOURCE_DIR}/tools/setup_helpers/generate_linker_script.py
+              --filein "${LINKER_SCRIPT_FILE_IN}"
+              --fout  "${LINKER_SCRIPT_FILE_OUT}"
+      RESULT_VARIABLE _gen_result
+      OUTPUT_VARIABLE _gen_output
+      ERROR_VARIABLE  _gen_error
+    )
 
-  if(NOT _gen_result EQUAL 0)
-    message(FATAL_ERROR
-      "Failed to generate linker script:\n${_gen_output}\n${_gen_error}")
+    if(NOT _gen_result EQUAL 0)
+      message(FATAL_ERROR
+        "Failed to generate linker script:\n${_gen_output}\n${_gen_error}")
+    endif()
+    string(APPEND CMAKE_SHARED_LINKER_FLAGS " -T${LINKER_SCRIPT_FILE_OUT}")
+    string(APPEND CMAKE_MODULE_LINKER_FLAGS " -T${LINKER_SCRIPT_FILE_OUT}")
   endif()
 
   append_cxx_flag_if_supported("-ffunction-sections" CMAKE_CXX_FLAGS)
   append_cxx_flag_if_supported("-fdata-sections" CMAKE_CXX_FLAGS)
   append_c_flag_if_supported("-ffunction-sections" CMAKE_C_FLAGS)
   append_c_flag_if_supported("-fdata-sections" CMAKE_C_FLAGS)
-
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -T${LINKER_SCRIPT_FILE_OUT}")
-  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -T${LINKER_SCRIPT_FILE_OUT}")
 
 else()
   if(LINUX AND CPU_AARCH64)
