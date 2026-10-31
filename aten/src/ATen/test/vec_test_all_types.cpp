@@ -1575,6 +1575,29 @@ namespace {
       }
     }
 
+    TEST(FunctionalSVE, BFloat16StoreAndMinimum) {
+      using BF16 = c10::BFloat16;
+      using Vec = at::vec::Vectorized<BF16>;
+      std::array<BF16, Vec::size()> input;
+      std::array<BF16, Vec::size()> other;
+      std::array<BF16, Vec::size() + 2> output;
+      for (int i = 0; i < Vec::size(); ++i) {
+        input[i] = BF16(static_cast<float>(i + 1));
+        other[i] = BF16(static_cast<float>(i + 65));
+      }
+      for (int count = 1; count <= Vec::size(); ++count) {
+        std::fill(output.begin(), output.end(), BF16(-7.f));
+        auto result = at::vec::minimum(Vec::loadu(input.data()), Vec::loadu(other.data()));
+        result.store(output.data(), count);
+        for (int i = 0; i < count; ++i) {
+          EXPECT_EQ(static_cast<float>(output[i]), i + 1);
+        }
+        for (int i = count; i < Vec::size() + 2; ++i) {
+          EXPECT_EQ(static_cast<float>(output[i]), -7.f);
+        }
+      }
+    }
+
     TYPED_TEST(FunctionalTests, Map) {
         using vec = TypeParam;
         using VT = ValueType<TypeParam>;

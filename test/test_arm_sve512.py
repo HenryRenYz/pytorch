@@ -22,6 +22,24 @@ class TestArmSVE512(unittest.TestCase):
         self.assertIn("libomp.so", maps)
         self.assertNotIn("libgomp", maps)
 
+    def test_sme_vector_length_initialization(self):
+        bootstrap = """
+import ctypes, os, sys
+result = ctypes.CDLL(None).prctl(63, 32 | (1 << 17), 0, 0, 0)
+assert result >= 0, result
+os.execv(sys.executable, [sys.executable, '-c', sys.argv[1]])
+"""
+        code = """
+import ctypes, torch
+assert ctypes.CDLL(None).prctl(64, 0, 0, 0, 0) & 0xffff == 64
+for threads in (1, 4, 2):
+    torch.set_num_threads(threads)
+    a = torch.ones(128, 128)
+    torch.testing.assert_close(a @ a, torch.full_like(a, 128))
+assert 'C++ Version:' in torch.__config__.show()
+"""
+        subprocess.run([sys.executable, "-c", bootstrap, code], check=True)
+
     def test_active_vector_length_dispatch(self):
         bootstrap = """
 import ctypes, os, sys
@@ -42,7 +60,7 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
 
     def test_reductions_and_tails(self):
         for dtype in (torch.float32, torch.float64, torch.bfloat16):
-            for n in (1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 513):
+            for n in (1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 256, 512, 513):
                 with self.subTest(dtype=dtype, n=n):
                     x = torch.arange(1, n + 1, dtype=torch.float32).to(dtype)
                     ref = x.double()
