@@ -2,6 +2,9 @@
 set -euo pipefail
 arm_source_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$arm_source_root/tools/arm/environment.sh"
+# Host tools such as protoc are built and executed during this build too.
+# The Kylin system runtime is GCC 10, older than the selected C++20 headers.
+export LD_LIBRARY_PATH="$HPCKIT_ROOT/compiler/gcc/lib64:$LD_LIBRARY_PATH"
 source "$HOME/venvs/pytorch-arm-build/bin/activate"
 cd "$arm_source_root"
 mkdir -p "$HOME/pytorch-arm-artifacts-2.14"
