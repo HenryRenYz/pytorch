@@ -40,13 +40,38 @@ torch.testing.assert_close(c, (a.double() @ b.double()).bfloat16(), atol=.04, rt
         )
         self.assertIn("matmul,brg:sve_512", process.stdout + process.stderr)
 
-    def test_bf16_blas_fallback_beta_zero(self):
+    def test_low_precision_blas_fallback_beta_zero(self):
         # Exercise KML explicitly even when oneDNN would normally win.
-        a, b = (torch.randn(65, 65).bfloat16() for _ in range(2))
-        out = torch.full((65, 65), float("nan"), dtype=torch.bfloat16)
-        with torch.backends.mkldnn.flags(enabled=False):
-            torch.mm(a, b, out=out)
-        torch.testing.assert_close(out, (a.double() @ b.double()).bfloat16(), atol=.04, rtol=.04)
+        for dtype in (torch.bfloat16, torch.float16):
+            a, b = (torch.randn(65, 65).to(dtype) for _ in range(2))
+            out = torch.full((65, 65), float("nan"), dtype=dtype)
+            with torch.backends.mkldnn.flags(enabled=False):
+                torch.mm(a, b, out=out)
+            tol = .04 if dtype == torch.bfloat16 else .003
+            torch.testing.assert_close(out, (a.double() @ b.double()).to(dtype), atol=tol, rtol=tol)
+
+    def test_bf16_backend_threads(self):
+        code = """
+import ctypes, os, torch
+torch.set_num_threads(int(os.environ['OMP_NUM_THREADS']))
+kml = ctypes.CDLL(os.environ['KML_BLAS_DIR'] + '/libkblas.so')
+for name in ('BlasGetNumThreads', 'BlasGetNumThreadsLocal'):
+    query = getattr(kml, name)
+    query.restype = ctypes.c_int
+    query.argtypes = []
+    assert query() == int(os.environ['BLAS_NUM_THREADS'])
+a = torch.randn(8, 128, 64).bfloat16()
+b = torch.randn(8, 128, 64).bfloat16().transpose(-1, -2)
+for x, y in ((a, b), (a[0], b[0])):
+    torch.testing.assert_close(x @ y, (x.double() @ y.double()).bfloat16(), atol=.04, rtol=.04)
+"""
+        for threads, blas_threads, onednn in ((1, 1, False), (1, 2, True), (2, 1, True)):
+            with self.subTest(threads=threads, blas_threads=blas_threads):
+                env = dict(os.environ, OMP_NUM_THREADS=str(threads),
+                           BLAS_NUM_THREADS=str(blas_threads), ONEDNN_VERBOSE="1", DNNL_VERBOSE="1")
+                process = subprocess.run([sys.executable, "-c", code], env=env,
+                                         check=True, capture_output=True, text=True)
+                self.assertEqual("matmul,brg:sve_512" in process.stdout + process.stderr, onednn)
 
     def test_sme_vector_length_initialization(self):
         bootstrap = """

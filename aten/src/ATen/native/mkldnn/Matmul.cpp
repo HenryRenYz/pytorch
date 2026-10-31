@@ -99,15 +99,32 @@ bool use_mkldnn_tf32_matmul(
 
 #include <ATen/native/mkldnn/MKLDNNCommon.h>
 #include <ATen/native/mkldnn/Utils.h>
+#ifdef ATEN_ARM_KML_BLAS
+#include <ATen/Parallel.h>
+extern "C" int BlasGetNumThreads(void);
+extern "C" int BlasGetNumThreadsLocal(void);
+#endif
 
 namespace at::native {
+
+#ifdef ATEN_ARM_KML_BLAS
+static bool prefer_single_thread_kml_bf16() {
+  return at::get_num_threads() == 1 && BlasGetNumThreads() == 1 &&
+      BlasGetNumThreadsLocal() == 1;
+}
+#endif
 
 static bool use_mkldnn_bf16_matmul() {
   return at::globalContext().userEnabledMkldnn() && mkldnn_bf16_device_check();
 }
 
 static bool use_mkldnn_fp16_matmul() {
+#if defined(ATEN_ARM_KML_BLAS) && defined(__aarch64__) && !AT_MKLDNN_ACL_ENABLED()
+  // This native oneDNN build has no FP16 GEMM primitive; use KML shgemm.
+  return false;
+#else
   return at::globalContext().userEnabledMkldnn() && mkldnn_fp16_device_check();
+#endif
 }
 
 static bool use_mkldnn_bf32_matmul() {
@@ -274,6 +291,11 @@ bool mkldnn_bf16_gemm(
     const c10::BFloat16 *b, int64_t ldb,
     float beta,
     c10::BFloat16 *c, int64_t ldc) {
+#ifdef ATEN_ARM_KML_BLAS
+  if (prefer_single_thread_kml_bf16()) {
+    return false;
+  }
+#endif
   return mkldnn_gemm<c10::BFloat16>(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
 }
 
@@ -448,6 +470,11 @@ bool use_mkldnn_bf16_matmul(
     const Tensor& mat1,
     const Tensor& mat2,
     const Tensor& result) {
+#ifdef ATEN_ARM_KML_BLAS
+  if (mat1.scalar_type() == kBFloat16 && prefer_single_thread_kml_bf16()) {
+    return false;
+  }
+#endif
 #if defined(__aarch64__)
   if (mkldnn_bf16_device_check_arm()) {
     // onednn fastmath mode can leverage bf16 HW even for the fp32 input, e.g.

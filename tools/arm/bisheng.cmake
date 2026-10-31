@@ -37,9 +37,10 @@ function(_bisheng_configure_generated_wrappers)
       DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/fbgemm"
       APPEND PROPERTY COMPILE_DEFINITIONS HAVE_SVE=0)
   endif()
-  # Keep oneDNN BF16 matmul enabled. Only the KML beta=0 workaround
-  # in CPUBlas needs to know that this is a KML build.
+  # Keep multithreaded BF16 on oneDNN; KML handles the verified single-thread
+  # case and FP16 GEMM absent from this native oneDNN configuration.
   set_property(SOURCE "${CMAKE_SOURCE_DIR}/aten/src/ATen/native/CPUBlas.cpp"
+    "${CMAKE_SOURCE_DIR}/aten/src/ATen/native/mkldnn/Matmul.cpp"
     DIRECTORY "${CMAKE_SOURCE_DIR}/caffe2"
     APPEND PROPERTY COMPILE_DEFINITIONS ATEN_ARM_KML_BLAS)
   set(_wrappers)

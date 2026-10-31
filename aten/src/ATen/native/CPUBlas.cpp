@@ -437,9 +437,11 @@ void gemm(
       int64_t c_size = static_cast<int64_t>(n_) * m_;
       // C matrix in OpenBLAS shgemm are of type "float" so we have to convert, copy and copy back.
       std::vector<float> float_v(c_size, 0.0f);
-      for (const auto j : c10::irange(n)) {
-        for (const auto i : c10::irange(m)) {
-          float_v[j * m_ + i] = c10::convert<float>(c[j * ldc_ + i]);
+      if (beta != 0.0f) {
+        for (const auto j : c10::irange(n)) {
+          for (const auto i : c10::irange(m)) {
+            float_v[j * m_ + i] = c10::convert<float>(c[j * ldc_ + i]);
+          }
         }
       }
       shgemm_(&transa_, &transb_,
