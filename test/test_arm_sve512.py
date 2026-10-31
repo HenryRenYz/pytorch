@@ -115,6 +115,26 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
         torch.testing.assert_close((sparse * sparse).to_dense(), sparse.to_dense().square())
         x = torch.arange(33, dtype=torch.float32)
         torch.testing.assert_close(torch.fft.irfft(torch.fft.rfft(x), n=33), x, atol=1e-5, rtol=1e-5)
+        torch.manual_seed(29)
+        for dtype in (torch.float32, torch.bfloat16):
+            q, k, v = (torch.randn(2, 4, 17, 32).to(dtype) for _ in range(3))
+            expected = F.scaled_dot_product_attention(q.double(), k.double(), v.double()).to(dtype)
+            tol = 0.02 if dtype == torch.bfloat16 else 2e-5
+            torch.testing.assert_close(
+                F.scaled_dot_product_attention(q, k, v), expected, atol=tol, rtol=tol,
+            )
+
+    def test_batched_and_low_precision_matmul(self):
+        torch.manual_seed(27)
+        for dtype in (torch.float32, torch.bfloat16, torch.float16):
+            for m, k, n in ((16, 32, 17), (65, 129, 33), (128, 128, 128)):
+                with self.subTest(dtype=dtype, shape=(m, k, n)):
+                    a = torch.randn(3, m, k).to(dtype)
+                    b = torch.randn(3, n, k).to(dtype).transpose(-1, -2)
+                    expected = (a.double() @ b.double()).to(dtype)
+                    tol = 0.04 if dtype == torch.bfloat16 else 0.003 if dtype == torch.float16 else 5e-5
+                    torch.testing.assert_close(torch.bmm(a, b), expected, atol=tol, rtol=tol)
+                    torch.testing.assert_close(a[0] @ b[0], expected[0], atol=tol, rtol=tol)
 
     def test_inductor(self):
         def fused(x, y):
@@ -127,6 +147,28 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
             # Inductor can retain FP32 intermediates for BF16 fusion.
             tol = 0.03 if dtype == torch.bfloat16 else 2e-5
             torch.testing.assert_close(result, fused(x, y), atol=tol, rtol=tol)
+
+    def test_inductor_cpp_gemm(self):
+        from torch._inductor import config
+        from torch._inductor.utils import run_and_get_code
+
+        class FrozenMM(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.register_buffer("weight", torch.randn(129, 33))
+
+            def forward(self, a):
+                return (a @ self.weight).relu()
+
+        torch.manual_seed(28)
+        model, a = FrozenMM().eval(), torch.randn(65, 129)
+        # Upstream CPP GEMM templates require a constant/prepacked RHS.
+        with torch.no_grad(), config.patch(
+            freezing=True, max_autotune=True, max_autotune_gemm_backends="CPP",
+        ):
+            result, code = run_and_get_code(torch.compile(model, fullgraph=True), a)
+        torch.testing.assert_close(result, model(a), atol=5e-5, rtol=5e-5)
+        self.assertIn("micro_gemm", "\n".join(code))
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 """Run from outside the source tree; emit JSON lines for comparable CPU runs."""
 
 import argparse
+import ctypes
 import json
 import os
+from pathlib import Path
 import platform
 import subprocess
 import sys
@@ -31,11 +33,26 @@ def main():
 
     torch.manual_seed(2026)
     torch.set_num_interop_threads(1)
+    vector_lengths = {}
+    if platform.machine() == "aarch64":
+        libc = ctypes.CDLL(None)
+        for name, request in (("sve_bytes", 51), ("sme_bytes", 64)):
+            value = libc.prctl(request, 0, 0, 0, 0)
+            vector_lengths[name] = value & 0xffff if value >= 0 else None
+    libraries = sorted({
+        line.split()[-1] for line in Path("/proc/self/maps").read_text().splitlines()
+        if any(name in line for name in ("libkblas", "libklapack", "libomp", "libgomp", "libmpi.so", "libopenblas"))
+    })
     print(json.dumps({
         "type": "environment", "host": platform.node(),
         "torch": torch.__version__,
         "capability": torch.backends.cpu.get_cpu_capability(),
         "affinity": sorted(os.sched_getaffinity(0)),
+        "vector_lengths": vector_lengths,
+        "loaded_libraries": libraries,
+        "thread_environment": {name: os.environ.get(name) for name in (
+            "OMP_NUM_THREADS", "BLAS_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+        )},
         "config": torch.__config__.show(),
     }), flush=True)
     for threads in args.threads:
