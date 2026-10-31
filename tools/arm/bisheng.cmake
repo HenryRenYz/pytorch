@@ -30,6 +30,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "" FORCE)
 # Apply the workaround in the target's directory after it has been added;
 # leave numerical kernels and their OpenMP optimizations unchanged.
 function(_bisheng_configure_generated_wrappers)
+  # The FBGEMM NEON TU is built without SVE. Its generic native TU must not
+  # call conversion entry points that the NEON TU only defines with HAVE_SVE.
+  if(TARGET fbgemm_generic)
+    set_property(SOURCE "${CMAKE_SOURCE_DIR}/third_party/fbgemm/src/QuantUtils.cc"
+      DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/fbgemm"
+      APPEND PROPERTY COMPILE_DEFINITIONS HAVE_SVE=0)
+  endif()
   # Keep oneDNN BF16 matmul enabled. Only the KML beta=0 workaround
   # in CPUBlas needs to know that this is a KML build.
   set_property(SOURCE "${CMAKE_SOURCE_DIR}/aten/src/ATen/native/CPUBlas.cpp"

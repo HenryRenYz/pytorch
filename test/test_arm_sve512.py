@@ -195,6 +195,23 @@ os.execv(sys.executable, [sys.executable, '-c', sys.argv[2]])
             tol = 0.03 if dtype == torch.bfloat16 else 2e-5
             torch.testing.assert_close(result, fused(x, y), atol=tol, rtol=tol)
 
+    def test_quantized_prepack(self):
+        for bits in (2, 4, 8):
+            kind = "byte" if bits == 8 else f"{bits}bit"
+            pack = getattr(torch.ops.quantized, f"embedding_bag_{kind}_prepack")
+            unpack = getattr(torch.ops.quantized, f"embedding_bag_{kind}_unpack")
+            for dtype in (torch.float32, torch.float16):
+                for columns in (16, 64, 260):
+                    with self.subTest(bits=bits, dtype=dtype, columns=columns):
+                        x = torch.linspace(-1, 1, columns).repeat(3, 1)
+                        x[1].fill_(0.125)
+                        x = x.to(dtype)
+                        result = unpack(pack(x))
+                        self.assertEqual(result.shape, x.shape)
+                        torch.testing.assert_close(
+                            result, x.float(), atol=1 / (2**bits - 1) + 0.01, rtol=0,
+                        )
+
     def test_inductor_cpp_gemm(self):
         from torch._inductor import config
         from torch._inductor.utils import run_and_get_code
