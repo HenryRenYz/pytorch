@@ -1353,8 +1353,8 @@ Tensor outer(const Tensor& self, const Tensor& vec2) {
 #endif
 
 
-#if !defined(__aarch64__) || AT_MKLDNN_ACL_ENABLED()
-// Used by default on x86 platforms and on AArch64+ACL
+#if !defined(__aarch64__) || AT_MKLDNN_ACL_ENABLED() || AT_MKLDNN_ENABLED()
+// Also used by native oneDNN BF16 kernels on AArch64 without ACL.
 static inline int64_t get_mkldnn_matmul_min_dim() {
   static auto value = [&] {
     const int64_t default_min_dim = [&] {
@@ -1762,9 +1762,16 @@ static inline void bmm_out_or_baddbmm_(const Tensor& self_or_result_, const Tens
     return (strides[2] == 1 && (sizes[1] == 1 || strides[1] >= sizes[2])) ||
         (strides[1] == 1 && (sizes[2] == 1 || strides[2] >= sizes[1]));
   };
-#if !defined(__aarch64__) || AT_MKLDNN_ACL_ENABLED()
-  // Always apply mkldnn heuristic on x86 platform, but on ARM only if compiled with ACL
-  bool apply_heur = apply_mkldnn_matmul_heur(batch1.sizes()[1], batch1.sizes()[2], batch2.sizes()[2]);
+#if !defined(__aarch64__) || AT_MKLDNN_ACL_ENABLED() || AT_MKLDNN_ENABLED()
+  // Native AArch64 BF16 BRGEMM is available independently of ACL.
+  // oneDNN's native SVE BF16 BRGEMM does not require ACL. Keep FP32
+  // on the configured BLAS when ACL is disabled, but allow oneDNN to
+  // parallelize BF16 across the whole batch and write BF16 directly.
+  bool apply_heur =
+#if defined(__aarch64__) && !AT_MKLDNN_ACL_ENABLED()
+      batch1.scalar_type() == kBFloat16 &&
+#endif
+      apply_mkldnn_matmul_heur(batch1.sizes()[1], batch1.sizes()[2], batch2.sizes()[2]);
   if (apply_heur && use_mkldnn_matmul(batch1, batch2, self_or_result)) {
     try {
       mkldnn_matmul(batch1, batch2, self_or_result, beta.to<float>(), alpha.to<float>());

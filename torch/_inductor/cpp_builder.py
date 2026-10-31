@@ -1628,9 +1628,8 @@ def _get_openmp_args(
             libs.append("omp")
         else:
             if _is_clang(cpp_compiler):
-                # TODO: fix issue, can't find omp.h
-                cflags.append("fopenmp")
-                libs.append("gomp")
+                cflags.append("fopenmp=libomp")
+                libs.append("omp")
             elif _is_intel_compiler(cpp_compiler):
                 cflags.append("fiopenmp")
             else:

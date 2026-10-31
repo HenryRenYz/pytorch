@@ -21,7 +21,7 @@ namespace vec {
 // accessed as `at::vec`.
 inline namespace CPU_CAPABILITY {
 
-#if defined(CPU_CAPABILITY_SVE256) && defined(__ARM_FEATURE_BF16)
+#if (defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512)) && defined(__ARM_FEATURE_BF16)
 
 template <>
 struct is_vec_specialized_for<BFloat16> : std::bool_constant<true> {};
@@ -85,24 +85,15 @@ class Vectorized<BFloat16> {
     return b;
   }
   static Vectorized<BFloat16> loadu(const void* ptr, int64_t count = size()) {
-    if (count == size())
-      return svld1_bf16(ptrue, reinterpret_cast<const bfloat16_t*>(ptr));
-    svbool_t pg = svwhilelt_b16(0ull, count);
-    return svld1_bf16(pg, reinterpret_cast<const bfloat16_t*>(ptr));
+    const svbool_t pg = count == size() ? ptrue : svwhilelt_b16(0ull, count);
+    return svreinterpret_bf16_u16(
+        svld1_u16(pg, reinterpret_cast<const uint16_t*>(ptr)));
   }
   void store(void* ptr, int64_t count = size()) const {
-    __at_align__ bfloat16_t tmp[size()];
-    std::memset(tmp, 0, sizeof(tmp));
-    if (count == size()) {
-      svst1_bf16(ptrue, reinterpret_cast<bfloat16_t*>(tmp), values);
-    } else {
-      svbool_t pg = svwhilelt_b16(0ull, count);
-      svst1_bf16(pg, reinterpret_cast<bfloat16_t*>(tmp), values);
-    }
-    std::memcpy(
-        reinterpret_cast<bfloat16_t*>(ptr),
-        reinterpret_cast<const bfloat16_t*>(tmp),
-        std::min<int64_t>(count, size()) * sizeof(bfloat16_t));
+    // BFloat16 stores its representation as uint16_t. Access those bits
+    // directly to avoid native __bf16 aliasing and temporary-buffer DSE.
+    const svbool_t pg = count == size() ? ptrue : svwhilelt_b16(0ull, count);
+    svst1_u16(pg, reinterpret_cast<uint16_t*>(ptr), svreinterpret_u16_bf16(values));
   }
   const BFloat16& operator[](int idx) const = delete;
   BFloat16& operator[](int idx) = delete;

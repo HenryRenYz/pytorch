@@ -265,7 +265,7 @@ class VecSVE(VecISA):
     )
 
     def __post_init__(self) -> None:
-        if self._bit_width not in (128, 256):
+        if self._bit_width not in (128, 256, 512):
             raise AssertionError(f"unsupported SVE bit width: {self._bit_width}")
         nelements = self._bit_width // 32
         self._macro = [
@@ -580,7 +580,9 @@ supported_vec_isa_list = [
     VecAVX512(),
     VecAVX2(),
     VecNEON(),
+    VecSVE(512),
     VecSVE(256),
+    VecSVE(128),
 ]
 
 
@@ -591,7 +593,12 @@ def get_isa_from_cpu_capability(
 ):
     # AMX setting is not supported in eager
     # VecAMX will be prioritized for selection when setting ATEN_CPU_CAPABILITY to avx512
-    # TODO add sve256 support
+    if capability in ("sve128", "sve256", "sve512"):
+        sve_bits = int(capability[3:])
+        for vec_isa in vec_isa_list:
+            if isinstance(vec_isa, VecSVE) and vec_isa.bit_width() == sve_bits:
+                return vec_isa
+
     capability_to_isa_str = {
         "default": "INVALID_VEC_ISA",
         "zvector": "zvector",
@@ -643,14 +650,9 @@ def valid_vec_isa_list() -> list[VecISA]:
     elif arch == "ppc64le":
         isa_list.append(VecVSX())
     elif arch == "aarch64":
-        caps = torch.cpu.get_capabilities()
-        if (caps.get("sve2", False) or caps.get("sve", False)) and caps.get(
-            "bf16", False
-        ):
-            if caps.get("sve_max_length") == 128:
-                isa_list.append(VecSVE(128))
-            else:
-                isa_list.append(VecSVE(256))
+        capability = torch.backends.cpu.get_cpu_capability()
+        if capability in ("SVE128", "SVE256", "SVE512"):
+            isa_list.append(VecSVE(int(capability[3:])))
         else:
             isa_list.append(VecNEON())
 

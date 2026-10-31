@@ -381,7 +381,7 @@ namespace {
     TYPED_TEST(Hyperbolic, Tanh) {
         using vec = TypeParam;
 // NOTE: Because SVE uses ACL logic, the precision changes, hence the adjusted tolerance.
-#if defined(CPU_CAPABILITY_SVE256)
+#if (defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512))
         using UVT = UvalueType<vec>;
         UVT tolerance = getDefaultTolerance<UVT>();
         test_unary<vec>(
@@ -621,7 +621,7 @@ namespace {
         }
       }
     }
-#if defined(CPU_CAPABILITY_SVE256) && defined(__ARM_FEATURE_BF16)
+#if (defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512)) && defined(__ARM_FEATURE_BF16)
     TEST(NanBfloat16, IsNan) {
       for (unsigned int ii = 0; ii < 0xFFFF; ++ii) {
         c10::BFloat16 val(ii, c10::BFloat16::from_bits());
@@ -1628,6 +1628,42 @@ namespace {
         }
     }
 #endif
+    TEST(FunctionalSVE, FloatReductionAcrossAllLanes) {
+      float values[127];
+      for (int i = 0; i < 127; ++i) {
+        values[i] = static_cast<float>(i + 1);
+      }
+      for (int n : {1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127}) {
+        EXPECT_EQ(at::vec::reduce_all<float>([](auto a, auto b) { return a + b; }, values, n),
+                  n * (n + 1) / 2) << "length=" << n;
+        EXPECT_EQ(at::vec::reduce_all<float>([](auto a, auto b) { return at::vec::maximum(a, b); }, values, n),
+                  n) << "length=" << n;
+      }
+    }
+
+    TEST(FunctionalSVE, BFloat16StoreAndMinimum) {
+      using BF16 = c10::BFloat16;
+      using Vec = at::vec::Vectorized<BF16>;
+      std::array<BF16, Vec::size()> input;
+      std::array<BF16, Vec::size()> other;
+      std::array<BF16, Vec::size() + 2> output;
+      for (int i = 0; i < Vec::size(); ++i) {
+        input[i] = BF16(static_cast<float>(i + 1));
+        other[i] = BF16(static_cast<float>(i + 65));
+      }
+      for (int count = 1; count <= Vec::size(); ++count) {
+        std::fill(output.begin(), output.end(), BF16(-7.f));
+        auto result = at::vec::minimum(Vec::loadu(input.data()), Vec::loadu(other.data()));
+        result.store(output.data(), count);
+        for (int i = 0; i < count; ++i) {
+          EXPECT_EQ(static_cast<float>(output[i]), i + 1);
+        }
+        for (int i = count; i < Vec::size() + 2; ++i) {
+          EXPECT_EQ(static_cast<float>(output[i]), -7.f);
+        }
+      }
+    }
+
     TYPED_TEST(FunctionalTests, Map) {
         using vec = TypeParam;
         using VT = ValueType<TypeParam>;
@@ -2201,7 +2237,7 @@ namespace {
 // In member function ‘virtual void {anonymous}::VecConvertBFloat16_ExhaustiveToFloat_Test::TestBody()’:
 // vec_test_all_types.cpp:2265:10: internal compiler error: Segmentation fault
 // 2265 |     TEST(VecConvertBFloat16, ExhaustiveToFloat) {
-#if !defined(CPU_CAPABILITY_SVE256) && !defined(CPU_CAPABILITY_SVE128)
+#if !(defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512)) && !defined(CPU_CAPABILITY_SVE128)
     template <typename vec, typename dst_t>
     void test_convert_to(const char* dst_t_name) {
       using src_t = ValueType<vec>;
@@ -2340,7 +2376,7 @@ namespace {
     #undef TEST_MASK_LOAD
     #undef TEST_MASK_LOAD_N
     }
-#if !defined(CPU_CAPABILITY_SVE256)
+#if !(defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512))
     TYPED_TEST(VecMaskTests, MaskedCheck) {
       using VT = ValueType<TypeParam>;
       using vec = TypeParam;
@@ -2365,7 +2401,7 @@ namespace {
     #undef TEST_MASK_CHECK_N
     }
 #endif
-#if !defined(CPU_CAPABILITY_SVE256)
+#if !(defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512))
     TYPED_TEST(VecMaskTests, ToFrom) {
       using vec = TypeParam;
       using VT = ValueType<TypeParam>;
@@ -2392,7 +2428,7 @@ namespace {
       }
     }
 #endif
-#if !defined(CPU_CAPABILITY_SVE256)
+#if !(defined(CPU_CAPABILITY_SVE256) || defined(CPU_CAPABILITY_SVE512))
     TYPED_TEST(VecMaskTests, Cast) {
       using vec = TypeParam;
       using src_t = ValueType<TypeParam>;

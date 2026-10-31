@@ -437,7 +437,7 @@ def do_not_use_with_small_m_for_int8_woq(config, m, n, k, alpha, num_threads, **
     ),
     *generate_gemm_config(
         VecSVE,
-        [(4, 24, 1), (4, 16, 1), (8, 8, 1)],
+        [(4, 32, 1), (4, 16, 1), (8, 16, 1)],
         input_dtype=torch.float,
         input2_dtype=torch.float,
         output_dtype=torch.float,

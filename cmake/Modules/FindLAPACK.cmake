@@ -210,12 +210,17 @@ if(BLAS_FOUND)
 
   # Generic LAPACK library?
   IF((NOT LAPACK_INFO) AND (BLAS_INFO STREQUAL "generic"))
+    if("$ENV{GENERIC_LAPACK_LIBRARIES}" STREQUAL "")
+      set(GENERIC_LAPACK "lapack")
+    else()
+      set(GENERIC_LAPACK $ENV{GENERIC_LAPACK_LIBRARIES})
+    endif()
     check_lapack_libraries(
       LAPACK_LIBRARIES
       LAPACK
       cheev
       ""
-      "lapack"
+      "${GENERIC_LAPACK}"
       "${BLAS_LIBRARIES}"
       )
     if(LAPACK_LIBRARIES)

@@ -373,9 +373,12 @@ void gemm(
       int64_t c_size = static_cast<int64_t>(n_) * m_;
       // C matrix in OpenBLAS sbgemm are of type "float" so we have to convert, copy and copy back.
       std::vector<float> float_v(c_size, 0.0f);
-      for (const auto j : c10::irange(n)) {
-        for (const auto i : c10::irange(m)) {
-          float_v[j * m_ + i] = c10::convert<float>(c[j * ldc_ + i]);
+      // beta=0 must not read uninitialized/NaN output.
+      if (beta != 0.0f) {
+        for (const auto j : c10::irange(n)) {
+          for (const auto i : c10::irange(m)) {
+            float_v[j * m_ + i] = c10::convert<float>(c[j * ldc_ + i]);
+          }
         }
       }
       sbgemm_(&transa_, &transb_,
@@ -473,6 +476,14 @@ void gemm(
       int m_ = m, n_ = n, k_ = k, lda_ = lda, ldb_ = ldb, ldc_ = ldc;
       char transa_ = to_blas(transa), transb_ = to_blas(transb);
       float alpha_ = alpha, beta_ = beta;
+#ifdef ATEN_ARM_KML_BLAS
+      // KML sbgemm can propagate an uninitialized C even with beta=0.
+      if (beta == 0.0f) {
+        for (const auto j : c10::irange(n)) {
+          std::fill_n(c + j * ldc, m, 0.0f);
+        }
+      }
+#endif
       sbgemm_(&transa_, &transb_,
               &m_, &n_, &k_,
               &alpha_,
