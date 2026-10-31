@@ -31,8 +31,10 @@ export CMAKE_PROJECT_TOP_LEVEL_INCLUDES="$arm_source_root/tools/arm/bisheng.cmak
 export CMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
 export CMAKE_C_FLAGS='-mcpu=native'
 export CMAKE_CXX_FLAGS='-mcpu=native'
-export CMAKE_EXE_LINKER_FLAGS='-fuse-ld=lld'
-export CMAKE_SHARED_LINKER_FLAGS='-fuse-ld=lld'
+# CMake adds the C compiler's system GCC directory when linking C dependencies.
+# Search the C++20 toolchain first, before that explicit system GCC 10 -L path.
+export CMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -L$HPCKIT_ROOT/compiler/gcc/lib64"
+export CMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld -L$HPCKIT_ROOT/compiler/gcc/lib64"
 export CMAKE_BUILD_TYPE=Release
 export USE_CUDA=0 USE_CUDNN=0 USE_NCCL=0 USE_ROCM=0 USE_XPU=0
 export USE_DISTRIBUTED=1 USE_MPI=1 USE_GLOO=1 USE_TENSORPIPE=0
